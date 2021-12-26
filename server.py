@@ -1,11 +1,13 @@
 import socket
 import select # OS level IO capability
+import time
 
 IP = '127.0.0.1'
 TCP_PORT = 1234
 UDP_PORT = 1235
 MAX_CONNECTIONS = 5
-HEADER_LENGTH = 10
+HEADER_LENGTH = 5
+ACTIVITY_LIMIT = 20
 
 # AF_INET corresponds to address family IPv4
 # SOCK_STREAM corresponds to TCP
@@ -31,18 +33,34 @@ sockets = [tcp_socket, udp_socket]
 clients = {}
 
 def recieve_message(client_socket):
-    message_header = client_socket.recv(HEADER_LENGTH)
+    try:
+        message_header = client_socket.recv(HEADER_LENGTH)
 
-    if not len(message_header):
-        return False
+        if not len(message_header):
+            return False
 
-    message_length = int(message_header.decode('utf-8'))
-    return {'header': message_header, 'data': client_socket.recv(message_length)}
+        message_length = int(message_header.decode('utf-8'))
+        return {'header': message_header, 'data': client_socket.recv(message_length), 'activity': ACTIVITY_LIMIT, 'start_time': time.time()}
+
+    except Exception:
+        False
 
 while True:
 
     # select.select will make use of OS and it will wait until a file descriptor is ready for IO
-    read_sockets, useless, exceptional_sockets = select.select(sockets, [], sockets)
+    read_sockets, useless, exceptional_sockets = select.select(sockets, [], sockets, 0)
+
+    if udp_socket not in read_sockets:
+        for client_socket in clients.copy():
+            waited_duration = time.time() - clients[client_socket]['start_time']
+            clients[client_socket]['activity'] -= waited_duration
+            clients[client_socket]['start_time'] = time.time()
+
+            if clients[client_socket]['activity'] <= 0:
+                print(f'terminating {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
+                clients.pop(client_socket)
+                sockets.remove(client_socket)
+
 
     for notified_socket in read_sockets:
 
@@ -59,6 +77,11 @@ while True:
             clients[client_socket] = client_data
             print(f"accepted new connection from {client_address}:{client_address[1]} username: {client_data['data'].decode('utf-8')}")
 
+        if notified_socket == udp_socket:
+            message = udp_socket.recvfrom(256)
+            clients[client_socket]['activity'] = ACTIVITY_LIMIT
+            print(f'resetting activity time from {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
+
         else:
 
             message = recieve_message(notified_socket)
@@ -67,7 +90,6 @@ while True:
                 # remove the socket here
                 continue
             
-            print(message)
             user = clients[notified_socket]
 
             for client_socket in clients:
