@@ -1,0 +1,118 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head>
+
+
+
+
+
+  
+  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>CSE474 Programming Assignment</title></head>
+<body>
+<big><big><span style="font-weight: bold; color: rgb(0, 0, 102);">CSE
+4074 Programming Assignment</span><span style="color: rgb(0, 0, 102);">:
+Peer-to-peer Chatting</span><br>
+</big><span style="font-weight: bold; color: rgb(102, 102, 204);">Due
+Date: January 9th, Sunday, 23:59</span><br>
+</big><br>
+
+In this assignment you will implement&nbsp;<span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;"><span class="Apple-converted-space"></span>a
+P2P chatting application according to the specification given
+below.&nbsp;</span>
+<h4 style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;">Protocol
+Description</h4>
+
+<span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;">Your
+P2P protocol will use the centralized index approach. It should be
+consist of two parts: a centralized 'registry' and a chatting
+application </span><span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;">between
+users</span><span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;">.
+Your protocol will implement the three key operations: join, search,
+and chat.</span>
+<p style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;"><b>Join:</b><span class="Apple-converted-space">&nbsp;</span>The
+registry will listen to a TCP socket at a known port. A new user will
+contact the registry at this port and register his/her username with a
+newly defined password. All the usernames should be unique. Each time a
+user wants to use the chatting system, he/she must contact the registry
+again, login with his username and password and indicate its presence.
+Then registry will know that the user is online and stores the IP
+address of the user.
+When the user want to leave the chatting system, he/she sends a
+'LOGOUT'
+message to the registry and it appears as an offline user. In
+addition, the registry also listens to a UDP socket and every 60
+seconds the user issues a 'HELLO' message to the UDP port of the
+registry. If the registry has not received a HELLO message from a user
+in 200 seconds, the user is removed from the list of online users.</p>
+
+<p style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;"><b>Search:</b><span class="Apple-converted-space">&nbsp;</span>A
+user looking for a peer to chat, contacts to the registry and searches
+his/her username. The registry looks for
+the name of the peer and returns the contact address of the user if
+he/she is online. The registry also sends a 'NOT FOUND' message if
+there is no user with the given username.<br>
+</p>
+
+<p style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;"><b>Chat:</b><span class="Apple-converted-space">&nbsp;</span>The user contacts the
+requested peer
+and sends a 'CHAT REQUEST' message. If the requested peer accepts,
+he/she sends an 'OK' reply message and they start chatting. Otherwise
+he/she sends a 'REJECT' message or a 'BUSY' message (if he/she is
+already chatting with another peer). <br>
+</p>
+
+<p style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;">You
+have to define details of your protocol. The user interface need not be
+sophisticated, but should be usable. It can be text-based or can be
+graphical. Your program should also provide <span style="font-weight: bold;">log files</span> which include all the
+messages sent and received by the peers and the registry.</p>
+<p style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;"><span style="font-weight: bold;">Implementation<br>
+</span><span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;">You can use any programming language of your choice (Java, Python, C, C++, etc). You should use only socket programming.
+Do not use any sophisticated libraries downloaded from the web. You
+will need to use multi-threaded server processes. Although we have
+covered implementation of single threaded servers in the lecture, there
+are tons of materials that you may refer for the description of
+multi-threaded server implementation, and also it is expected that you
+have some familiarity from the Operating Systems course.</span><br>
+
+
+
+</p>
+
+
+<span style="font-weight: bold;">Bonus<br>
+</span>You are expected to provide chatting between two peers. However,
+if your application provides group chatting, you will get up to 20
+bonus points. <br>
+
+<br>
+
+<span style="font-weight: bold;">Submission</span><br>
+
+<br>
+
+<bf style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;">The
+due date for this assignment is January 9th, 11.59pm. Deadline is
+strict, there will be no extension. It may take longer than expected,
+please start as soon as possible.</bf><span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;"><span class="Apple-converted-space"> </span>You
+have to submit a zip file "your_name(s).zip" including all <span style="font-weight: bold;">commented</span> source codes, a <span style="font-weight: bold;">PROJECT REPORT</span> which contains <span style="font-weight: bold;">a project summary, your solution approach,
+any encountered problems and how you solved them, any unresolved
+issues, and a usage explanation.</span></span><span style="font-weight: bold;"> You should also give details of the
+protocol that is used by the peers and the registry.</span> You can
+submit your projects via google classroom. <br style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;">
+
+<span style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-style: normal; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; background-color: rgb(255, 255, 255); display: inline ! important; float: none;">Late
+submissions: 25% penalty after the deadline and another 25% for every
+24h after the deadline.</span><br>
+
+<br>
+
+<em style="color: rgb(0, 0, 0); font-family: 'Times New Roman'; font-size: medium; font-variant: normal; font-weight: normal; letter-spacing: normal; line-height: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px;">You
+can do this
+assignment <span style="font-weight: bold;">in groups of three students</span>.
+You are not allowed to exchange code snippets or anything across
+groups. Also you are not allowed to use any code from the Internet (github, etc). We will check your codes for plagiarism.<br>
+<br>
+</em>
+<br>
+
+</body></html>
