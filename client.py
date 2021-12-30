@@ -5,8 +5,8 @@ import time
 import threading
 
 IP = '127.0.0.1'
-TCP_PORT = 1234
-UDP_PORT = 1235
+TCP_PORT = 6234
+UDP_PORT = 6235
 HEADER_LENGTH = 5
 STATUS_PERIOD = 60
 
@@ -50,6 +50,10 @@ def send_message():
             client_message = '&&LOGOUT&&'
             logout = True
 
+        if 'SEARCH' in ' '.join(client_message.split(':')[1:]).strip():
+            searched_peer = client_message.split(' ')[-1].strip()
+            client_message = f'&&SEARCH&&|{searched_peer}'
+
         client_message = client_message.encode('utf-8')
         message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
         tcp_client_socket.send(message_header + client_message)
@@ -70,7 +74,11 @@ def receive_message():
                 message_header = tcp_client_socket.recv(HEADER_LENGTH)
                 message_length = int(message_header.decode('utf-8'))
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
-                message = ' '.join(message.split(':')[1:]).strip()
+                
+                if ':' in message:
+                    message = ' '.join(message.split(':')[1:]).strip()
+                else:
+                    username = 'server'
 
                 print(f'{username}: {message}')
 

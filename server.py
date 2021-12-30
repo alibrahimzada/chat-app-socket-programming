@@ -3,8 +3,8 @@ import select # OS level IO capability
 import time
 
 IP = '127.0.0.1'
-TCP_PORT = 1234
-UDP_PORT = 1235
+TCP_PORT = 6234
+UDP_PORT = 6235
 MAX_CONNECTIONS = 5
 HEADER_LENGTH = 5
 ACTIVITY_LIMIT = 200
@@ -44,6 +44,15 @@ def recieve_message(client_socket):
 
     except Exception:
         False
+
+
+def search_peer(peer_username):
+    address = None
+    for client in clients:
+        if clients[client]['data'].decode('utf-8') == peer_username:
+            address = client.getpeername()
+
+    return address
 
 while True:
 
@@ -90,10 +99,25 @@ while True:
                 # remove the socket here
                 continue
             
-            if message['data'].decode('utf-8') == '&&LOGOUT&&':
+            decoded_message = message['data'].decode('utf-8')
+
+            if decoded_message == '&&LOGOUT&&':
                 clients.pop(notified_socket)
                 sockets.remove(notified_socket)
                 continue
+            
+            if '&&SEARCH&&' in decoded_message:
+                searched_peer = (decoded_message.split('|')[-1]).strip()
+
+                response = search_peer(searched_peer)
+
+                if response == None:
+                    response = 'user not found'
+                else:
+                    response = 'user found. its address is' + str(response)
+
+                message['data'] = response.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
             user = clients[notified_socket]
 
