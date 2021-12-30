@@ -93,8 +93,4 @@ while True:
             user = clients[notified_socket]
 
             for client_socket in clients:
-                if client_socket == tcp_socket:
-                    continue
-                
                 client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])
-

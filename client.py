@@ -55,11 +55,16 @@ def receive_message():
     while True:
         try:
             while True:
+                username_header = tcp_client_socket.recv(HEADER_LENGTH)
+                username_length = int(username_header.decode('utf-8'))
+                username = tcp_client_socket.recv(username_length).decode('utf-8')
+
                 message_header = tcp_client_socket.recv(HEADER_LENGTH)
                 message_length = int(message_header.decode('utf-8'))
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
+                message = ' '.join(message.split(':')[1:]).strip()
 
-                print(f'{message}')
+                print(f'{username}: {message}')
 
         except IOError as e:
             if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
