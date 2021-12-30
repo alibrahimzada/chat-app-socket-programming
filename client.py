@@ -1,5 +1,5 @@
 import socket
-import select
+import os
 import errno
 import time
 import threading
@@ -8,7 +8,7 @@ IP = '127.0.0.1'
 TCP_PORT = 1234
 UDP_PORT = 1235
 HEADER_LENGTH = 5
-STATUS_PERIOD = 10
+STATUS_PERIOD = 60
 
 client_username = input("enter your username: ")
 client_password = input("enter your password: ")
@@ -41,14 +41,22 @@ def send_status():
             start_time = time.time()
 
 def send_message():
+    logout = False
     while True:
 
         client_message = f"{client_username}: {input()}"
 
-        if client_message:
-            client_message = client_message.encode('utf-8')
-            message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
-            tcp_client_socket.send(message_header + client_message)
+        if ' '.join(client_message.split(':')[1:]).strip() == 'LOGOUT':
+            client_message = '&&LOGOUT&&'
+            logout = True
+
+        client_message = client_message.encode('utf-8')
+        message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
+        tcp_client_socket.send(message_header + client_message)
+
+        if logout:
+            print(f'loggin out from session. goodbye {client_username}')
+            os.kill(os.getpid(), 9)
 
 def receive_message():
 

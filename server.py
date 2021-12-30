@@ -7,7 +7,7 @@ TCP_PORT = 1234
 UDP_PORT = 1235
 MAX_CONNECTIONS = 5
 HEADER_LENGTH = 5
-ACTIVITY_LIMIT = 20
+ACTIVITY_LIMIT = 200
 
 # AF_INET corresponds to address family IPv4
 # SOCK_STREAM corresponds to TCP
@@ -90,6 +90,11 @@ while True:
                 # remove the socket here
                 continue
             
+            if message['data'].decode('utf-8') == '&&LOGOUT&&':
+                clients.pop(notified_socket)
+                sockets.remove(notified_socket)
+                continue
+
             user = clients[notified_socket]
 
             for client_socket in clients:
