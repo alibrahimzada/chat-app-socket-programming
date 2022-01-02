@@ -31,6 +31,9 @@ print(f'UDP server is running at {IP}:{UDP_PORT} and it is waiting to receive co
 
 sockets = [tcp_socket]
 clients = {}
+private_chat_rooms = {}
+
+total_private_rooms = 0
 
 def recieve_message(client_socket):
     try:
@@ -58,12 +61,33 @@ def search_peer(peer_username):
 def get_peer_socket(peer_ip_addr, peer_port):
     for client in clients:
         address = client.getpeername()
-        print(type(address[0]), type(address[1]))
-
         if address == (peer_ip_addr, peer_port):
             return client
 
     return None
+
+
+def get_socket(username):
+    ip, port = search_peer(username)
+    user_socket = get_peer_socket(ip, port)
+    return user_socket
+
+
+def process_private_message(notified_socket, message):
+    for chat_room in private_chat_rooms:
+        if notified_socket == private_chat_rooms[chat_room][0] or notified_socket == private_chat_rooms[chat_room][1]:
+        # peer1 is receiver, peer2 is sender or peer 2 is receiver, peer1 is send
+            user = clients[notified_socket]
+            private_chat_rooms[chat_room][0].send(user['header'] + user['data'] + message['header'] + message['data'])
+            private_chat_rooms[chat_room][1].send(user['header'] + user['data'] + message['header'] + message['data'])
+
+
+def is_busy(peer_socket):
+    for chat_room in private_chat_rooms:
+        if peer_socket in private_chat_rooms[chat_room]:
+            return True
+
+    return False
 
 
 while True:
@@ -119,28 +143,80 @@ while True:
                 continue
             
             if '&&SEARCH&&' in decoded_message:
-                searched_peer = (decoded_message.split('|')[-1]).strip()
+                searched_peer = (decoded_message.split('|')[-2]).strip()
+                sender_username = (decoded_message.split('|')[-1]).strip()
           
                 response = search_peer(searched_peer)
           
                 if response == None:
                     response = 'user not found'
                 else:
-                    response = 'user found. its address is' + str(response)
+                    response = 'user found. its address is ' + str(response)
+
+                sender_socket = get_socket(sender_username)
 
                 message['data'] = response.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
-            if '&&CHATREQUEST&&' in decoded_message:
-                peer_ip_addr = (decoded_message.split('|')[-2]).strip()
-                peer_port = int((decoded_message.split('|')[-1]).strip())
-
-                client_socket = get_peer_socket(peer_ip_addr, peer_port)
-
-                client_socket.send(message['header'] + message['data'])
+                sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
                 continue
 
-            user = clients[notified_socket]
+            if '&&CHATREQUEST&&' in decoded_message:
+                peer_ip_addr = (decoded_message.split('|')[-3]).strip()
+                peer_port = int((decoded_message.split('|')[-2]).strip())
+                sender_username = (decoded_message.split('|')[-1]).strip()
 
-            for client_socket in clients:
-                client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])
+                client_socket = get_peer_socket(peer_ip_addr, peer_port)
+                sender_socket = get_socket(sender_username)
+
+                if client_socket is None:
+                    continue
+
+                if is_busy(client_socket):
+                    message['data'] = f'the user is busy. try again later.'.encode('utf-8')
+                    message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                    sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                else:
+                    message['data'] = f'{sender_username} would like to chat with you? (OK/REJECT)'.encode('utf-8')
+                    message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                    client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                # this send method is used to send a message to a specific port which is our requested client
+                continue
+            
+            if '&&REJECT&&' in decoded_message:
+                sender_username = (decoded_message.split('|')[-1]).strip()
+                peer_username =  (decoded_message.split('|')[-2]).strip()
+                sender_socket = get_socket(sender_username)
+
+                message['data'] = f'{peer_username} rejected the chat request!'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+
+                sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                continue
+
+            if '&&OK&&' in decoded_message:
+                sender_username = (decoded_message.split('|')[-1]).strip()
+                peer_username =  (decoded_message.split('|')[-2]).strip()
+
+                peer1_socket = get_socket(sender_username)
+                peer2_socket = get_socket(peer_username)
+
+                total_private_rooms += 1
+                private_chat_rooms[str(total_private_rooms)] = (peer1_socket, peer2_socket)
+
+                message['data'] = f'{peer_username} accepted the chat request. you can send your message now!'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+
+                peer1_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                continue
+
+            process_private_message(notified_socket, message)
+
+            # user = clients[notified_socket]
+
+            # for client_socket in clients:
+            #     client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])

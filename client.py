@@ -52,12 +52,20 @@ def send_message():
 
         if 'SEARCH' in ' '.join(client_message.split(':')[1:]).strip():
             searched_peer = client_message.split(' ')[-1].strip()
-            client_message = f'&&SEARCH&&|{searched_peer}'
+            client_message = f'&&SEARCH&&|{searched_peer}|{client_username}'
 
         if 'CHAT REQUEST' in ' '.join(client_message.split(':')[1:]).strip():
             peer_ip_addr = client_message.split(' ')[-2]
             peer_port = client_message.split(' ')[-1]
-            client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}'
+            client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}|{client_username}'
+
+        if 'REJECT' in ' '.join(client_message.split(':')[1:]).strip():
+            sender_username = client_message.split(' ')[-1]
+            client_message = f'&&REJECT&&|{client_username}|{sender_username}'
+
+        if 'OK' in ' '.join(client_message.split(':')[1:]).strip():
+            sender_username = client_message.split(' ')[-1]
+            client_message = f'&&OK&&|{client_username}|{sender_username}'
 
         client_message = client_message.encode('utf-8')
         message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
