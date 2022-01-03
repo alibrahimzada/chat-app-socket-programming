@@ -42,6 +42,7 @@ tcp_client_socket.send(header + encoded_client_username)
 
 def send_message():
     logout = False
+    ok_group = False
     while True:
 
         client_message = f"{client_username}: {input()}"
@@ -54,22 +55,6 @@ def send_message():
         if 'SEARCH' in message_content:
             searched_peer = client_message.split(' ')[-1].strip()
             client_message = f'&&SEARCH&&|{searched_peer}|{client_username}'
-
-        if 'CHAT REQUEST' in message_content:
-            peer_ip_addr = client_message.split(' ')[-2]
-            peer_port = client_message.split(' ')[-1]
-            client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}|{client_username}'
-
-        if 'REJECT' in message_content:
-            sender_username = client_message.split(' ')[-1]
-            client_message = f'&&REJECT&&|{client_username}|{sender_username}'
-
-        if 'OK' in message_content:
-            sender_username = client_message.split(' ')[-1]
-            client_message = f'&&OK&&|{client_username}|{sender_username}'
-        
-        if message_content == 'EXIT':
-            client_message = f'&&EXIT&&|{client_username}'
 
         if 'GROUP CHAT' in message_content:
             tokens = message_content.split()
@@ -84,6 +69,23 @@ def send_message():
         if 'OK GROUP' in message_content:
             group_number = client_message.split(' ')[-1]
             client_message = f'&&OKGROUP&&|{client_username}|{group_number}'
+            ok_group = True
+
+        if 'CHAT REQUEST' in message_content:
+            peer_ip_addr = client_message.split(' ')[-2]
+            peer_port = client_message.split(' ')[-1]
+            client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}|{client_username}'
+
+        if 'REJECT' in message_content:
+            sender_username = client_message.split(' ')[-1]
+            client_message = f'&&REJECT&&|{client_username}|{sender_username}'
+
+        if 'OK' in message_content and not ok_group:
+            sender_username = client_message.split(' ')[-1]
+            client_message = f'&&OK&&|{client_username}|{sender_username}'
+        
+        if message_content == 'EXIT':
+            client_message = f'&&EXIT&&|{client_username}'
 
 
         client_message = client_message.encode('utf-8')
