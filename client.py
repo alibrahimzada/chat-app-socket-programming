@@ -45,27 +45,46 @@ def send_message():
     while True:
 
         client_message = f"{client_username}: {input()}"
+        message_content = ' '.join(client_message.split(':')[1:]).strip()
 
-        if ' '.join(client_message.split(':')[1:]).strip() == 'LOGOUT':
+        if message_content == 'LOGOUT':
             client_message = '&&LOGOUT&&'
             logout = True
 
-        if 'SEARCH' in ' '.join(client_message.split(':')[1:]).strip():
+        if 'SEARCH' in message_content:
             searched_peer = client_message.split(' ')[-1].strip()
             client_message = f'&&SEARCH&&|{searched_peer}|{client_username}'
 
-        if 'CHAT REQUEST' in ' '.join(client_message.split(':')[1:]).strip():
+        if 'CHAT REQUEST' in message_content:
             peer_ip_addr = client_message.split(' ')[-2]
             peer_port = client_message.split(' ')[-1]
             client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}|{client_username}'
 
-        if 'REJECT' in ' '.join(client_message.split(':')[1:]).strip():
+        if 'REJECT' in message_content:
             sender_username = client_message.split(' ')[-1]
             client_message = f'&&REJECT&&|{client_username}|{sender_username}'
 
-        if 'OK' in ' '.join(client_message.split(':')[1:]).strip():
+        if 'OK' in message_content:
             sender_username = client_message.split(' ')[-1]
             client_message = f'&&OK&&|{client_username}|{sender_username}'
+        
+        if message_content == 'EXIT':
+            client_message = f'&&EXIT&&|{client_username}'
+
+        if 'GROUP CHAT' in message_content:
+            tokens = message_content.split()
+            client_message = f'&&GROUPCHAT&&|{client_username}|'
+            for i in range(2, len(tokens)):
+                client_message += tokens[i] + '|'
+
+        if 'REJECT GROUP' in message_content:
+            group_number = client_message.split(' ')[-1]
+            client_message = f'&&REJECTGROUP&&|{client_username}|{group_number}'
+
+        if 'OK GROUP' in message_content:
+            group_number = client_message.split(' ')[-1]
+            client_message = f'&&OKGROUP&&|{client_username}|{group_number}'
+
 
         client_message = client_message.encode('utf-8')
         message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
