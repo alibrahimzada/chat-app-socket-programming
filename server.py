@@ -1,7 +1,6 @@
 import socket
 import select # OS level IO capability
 import time
-
 import threading
 
 IP = '127.0.0.1'
@@ -45,7 +44,7 @@ def recieve_message(client_socket):
             return False
 
         message_length = int(message_header.decode('utf-8'))
-        return {'header': message_header, 'data': client_socket.recv(message_length), 'activity': ACTIVITY_LIMIT, 'start_time': time.time()}
+        return {'header': message_header, 'data': client_socket.recv(message_length), 'activity': ACTIVITY_LIMIT, 'start_time': time.time(), 'in_session': False}
 
     except Exception:
         False
@@ -153,18 +152,22 @@ def update_activity():
 
         if udp_socket not in read_sockets:
             for client_socket in clients.copy():
-                client_address = client_socket.getpeername()
-                waited_duration = time.time() - clients[client_socket]['start_time']
-                clients[client_socket]['activity'] -= waited_duration
-                clients[client_socket]['start_time'] = time.time()
 
-                if clients[client_socket]['activity'] <= 0:
-                    print(f'terminating {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
-                    clients.pop(client_socket)
-                    sockets.remove(client_socket)
+                try:
+                    client_address = client_socket.getpeername()
+                    waited_duration = time.time() - clients[client_socket]['start_time']
+                    clients[client_socket]['activity'] -= waited_duration
+                    clients[client_socket]['start_time'] = time.time()
+
+                    if clients[client_socket]['activity'] <= 0:
+                        print(f'terminating {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
+                        clients.pop(client_socket)
+                        sockets.remove(client_socket)
+
+                except KeyError:
+                    continue
 
         else:
-
             message = udp_socket.recvfrom(256)
             clients[client_socket]['activity'] = ACTIVITY_LIMIT
             print(f'resetting activity time from {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
@@ -183,7 +186,8 @@ def process_message():
 
             if notified_socket == tcp_socket or notified_socket == udp_socket:
                 continue
-                
+            
+            in_session = clients[notified_socket]['in_session']
             message = recieve_message(notified_socket)
 
             if not message:
@@ -192,12 +196,17 @@ def process_message():
             
             decoded_message = message['data'].decode('utf-8')
 
-            if decoded_message == '&&LOGOUT&&':
+            if decoded_message == '&&LOGOUT&&' and not in_session:
+                message['data'] = '&&LOGOUTSUCCESS&&'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                notified_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
                 clients.pop(notified_socket)
                 sockets.remove(notified_socket)
+
                 continue
             
-            elif '&&SEARCH&&' in decoded_message:
+            elif '&&SEARCH&&' in decoded_message and not in_session:
                 searched_peer = (decoded_message.split('|')[-2]).strip()
                 sender_username = (decoded_message.split('|')[-1]).strip()
             
@@ -218,7 +227,7 @@ def process_message():
                 sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
                 continue
 
-            elif '&&CHATREQUEST&&' in decoded_message:
+            elif '&&CHATREQUEST&&' in decoded_message and not in_session:
                 searched_peer = (decoded_message.split('|')[-2]).strip()
                 sender_username = (decoded_message.split('|')[-1]).strip()
 
@@ -240,7 +249,7 @@ def process_message():
 
                 continue
             
-            elif '&&REJECT&&' in decoded_message:
+            elif '&&REJECT&&' in decoded_message and not in_session:
                 sender_username = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
                 sender_socket = get_socket(sender_username)
@@ -252,7 +261,7 @@ def process_message():
 
                 continue
 
-            elif '&&OK&&' in decoded_message:
+            elif '&&OK&&' in decoded_message and not in_session:
                 sender_username = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
 
@@ -261,6 +270,8 @@ def process_message():
 
                 total_private_rooms += 1
                 private_chat_rooms[str(total_private_rooms)] = [peer1_socket, peer2_socket]
+                clients[peer1_socket]['in_session'] = True
+                clients[peer2_socket]['in_session'] = True
 
                 message['data'] = f'{peer_username} accepted the chat request. you can send your message now!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
@@ -269,7 +280,7 @@ def process_message():
 
                 continue
 
-            elif '&&EXIT&&' in decoded_message:
+            elif '&&EXIT&&' in decoded_message and in_session:
                 peer_username = (decoded_message.split('|')[-1]).strip()
                 peer_socket = get_socket(peer_username)
 
@@ -277,13 +288,14 @@ def process_message():
 
                 message['data'] = f'{peer_username} left the chat room.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                clients[peer_socket]['in_session'] = False
 
                 for client_socket in participant_sockets:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
                 continue
 
-            elif '&&GROUPCHAT&&' in decoded_message:
+            elif '&&GROUPCHAT&&' in decoded_message and not in_session:
                 tokens = decoded_message.split('|')
                 peers = tokens[2:-1]
                 sender_username = tokens[1]
@@ -292,7 +304,9 @@ def process_message():
                 message['data'] = f'{sender_username} would like to add you to group chat room {total_global_rooms}? (OK/REJECT GROUP <room_number>)'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
-                group_chat_rooms[str(total_global_rooms)] = [get_socket(sender_username)]
+                admin_socket = get_socket(sender_username)
+                group_chat_rooms[str(total_global_rooms)] = [admin_socket]
+                clients[admin_socket]['in_session'] = True
 
                 for peer in peers:
                     peer_socket = get_socket(peer)
@@ -304,7 +318,7 @@ def process_message():
 
                 continue
 
-            elif '&&REJECTGROUP&&' in decoded_message:
+            elif '&&REJECTGROUP&&' in decoded_message and not in_session:
                 group_number = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
 
@@ -316,13 +330,14 @@ def process_message():
 
                 continue
 
-            elif '&&OKGROUP&&' in decoded_message:
+            elif '&&OKGROUP&&' in decoded_message and not in_session:
                 group_number = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
 
                 peer_socket = get_socket(peer_username)
 
                 group_chat_rooms[group_number].append(peer_socket)
+                clients[peer_socket]['in_session'] = True
 
                 message['data'] = f'{peer_username} joined the group chat'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
@@ -331,8 +346,9 @@ def process_message():
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
                 continue
-
-            process_text_message(notified_socket, message)
+            
+            elif '&&CLIENTMESSAGE&&' in decoded_message and in_session:
+                process_text_message(notified_socket, message)
 
 
 register_user_thread = threading.Thread(target=register_new_users)

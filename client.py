@@ -41,18 +41,17 @@ def send_status():
             start_time = time.time()
 
 def send_message():
-    logout = False
-    ok_group = False
-    reject_group = False
 
     while True:
+        ok_group = False
+        reject_group = False
 
         client_message = f"{client_username}: {input()}"
+        client_message = '&&CLIENTMESSAGE&&|' + client_message
         message_content = ' '.join(client_message.split(':')[1:]).strip()
 
         if message_content == 'LOGOUT':
             client_message = '&&LOGOUT&&'
-            logout = True
 
         if 'SEARCH' in message_content:
             searched_peer = client_message.split(' ')[-1].strip()
@@ -89,14 +88,10 @@ def send_message():
         if message_content == 'EXIT':
             client_message = f'&&EXIT&&|{client_username}'
 
-
         client_message = client_message.encode('utf-8')
         message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
         tcp_client_socket.send(message_header + client_message)
 
-        if logout:
-            print(f'loggin out from session. goodbye {client_username}')
-            os.kill(os.getpid(), 9)
 
 def receive_message():
 
@@ -111,6 +106,10 @@ def receive_message():
                 message_length = int(message_header.decode('utf-8'))
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
                 
+                if '&&LOGOUTSUCCESS&&' in message:
+                    print(f'loggin out from session. goodbye {client_username}')
+                    os.kill(os.getpid(), 9)
+
                 if ':' in message:
                     message = ' '.join(message.split(':')[1:]).strip()
                 else:
