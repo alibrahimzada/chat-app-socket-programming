@@ -43,6 +43,8 @@ def send_status():
 def send_message():
     logout = False
     ok_group = False
+    reject_group = False
+
     while True:
 
         client_message = f"{client_username}: {input()}"
@@ -65,6 +67,7 @@ def send_message():
         if 'REJECT GROUP' in message_content:
             group_number = client_message.split(' ')[-1]
             client_message = f'&&REJECTGROUP&&|{client_username}|{group_number}'
+            reject_group = True
 
         if 'OK GROUP' in message_content:
             group_number = client_message.split(' ')[-1]
@@ -75,7 +78,7 @@ def send_message():
             searched_peer = client_message.split(' ')[-1].strip()
             client_message = f'&&CHATREQUEST&&|{searched_peer}|{client_username}'
 
-        if 'REJECT' in message_content:
+        if 'REJECT' in message_content and not reject_group:
             sender_username = client_message.split(' ')[-1]
             client_message = f'&&REJECT&&|{client_username}|{sender_username}'
 
