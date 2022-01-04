@@ -205,6 +205,8 @@ def process_message():
             
                 if response == None:
                     response = 'user not found'
+                elif searched_peer == sender_username:
+                    response = 'you can\'t search yourself. search for other users'
                 else:
                     response = f'{searched_peer} found. its address is ' + str(response)
 
