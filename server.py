@@ -83,9 +83,11 @@ def forward_message(chat_rooms, notified_socket, message):
             for client_socket in chat_rooms[chat_room]:
                 client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])
 
+
 def process_text_message(notified_socket, message):
     forward_message(private_chat_rooms, notified_socket, message)
     forward_message(group_chat_rooms, notified_socket, message)
+
 
 def is_busy(peer_socket):
     for chat_room in private_chat_rooms:
@@ -105,6 +107,7 @@ def remove_participant(chat_rooms, peer_socket):
     if room is None:
         return room, None
     return room, chat_rooms[room]
+
 
 def end_session(peer_socket):
     room, participant_sockets = remove_participant(private_chat_rooms, peer_socket)
@@ -203,7 +206,7 @@ def process_message():
                 if response == None:
                     response = 'user not found'
                 else:
-                    response = 'user found. its address is ' + str(response)
+                    response = f'{searched_peer} found. its address is ' + str(response)
 
                 sender_socket = get_socket(sender_username)
 
@@ -214,11 +217,10 @@ def process_message():
                 continue
 
             elif '&&CHATREQUEST&&' in decoded_message:
-                peer_ip_addr = (decoded_message.split('|')[-3]).strip()
-                peer_port = int((decoded_message.split('|')[-2]).strip())
+                searched_peer = (decoded_message.split('|')[-2]).strip()
                 sender_username = (decoded_message.split('|')[-1]).strip()
 
-                client_socket = get_peer_socket(peer_ip_addr, peer_port)
+                client_socket = get_socket(searched_peer)
                 sender_socket = get_socket(sender_username)
 
                 if client_socket is None:
@@ -234,7 +236,6 @@ def process_message():
                     message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                # this send method is used to send a message to a specific port which is our requested client
                 continue
             
             elif '&&REJECT&&' in decoded_message:
@@ -336,9 +337,9 @@ register_user_thread = threading.Thread(target=register_new_users)
 register_user_thread.start()
 print('successfully started register user thread')
 
-# update_activity_thread = threading.Thread(target=update_activity)
-# update_activity_thread.start()
-# print('successfully started update activity thread')
+update_activity_thread = threading.Thread(target=update_activity)
+update_activity_thread.start()
+print('successfully started update activity thread')
 
 process_message_thread = threading.Thread(target=process_message)
 process_message_thread.start()

@@ -19,26 +19,26 @@ tcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM
 tcp_client_socket.connect(((IP, TCP_PORT)))
 tcp_client_socket.setblocking(False)
 # SOCK_DGRAM corresponds to UDP
-# udp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-# udp_client_socket.connect(((IP, UDP_PORT)))
-# udp_client_socket.setblocking(False)
+udp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+udp_client_socket.connect(((IP, UDP_PORT)))
+udp_client_socket.setblocking(False)
 
 encoded_client_username = client_username.encode('utf-8')
 header = f"{len(encoded_client_username):<{HEADER_LENGTH}}".encode('utf-8')
 tcp_client_socket.send(header + encoded_client_username)
 
-# def send_status():
-#     start_time = time.time()
+def send_status():
+    start_time = time.time()
 
-#     while True:
+    while True:
 
-#         end_time = time.time()
+        end_time = time.time()
 
-#         if end_time - start_time >= STATUS_PERIOD:
-#             client_message = '&&HELLO&&'.encode('utf-8')
-#             message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
-#             udp_client_socket.sendto(message_header + client_message, (IP, UDP_PORT))
-#             start_time = time.time()
+        if end_time - start_time >= STATUS_PERIOD:
+            client_message = '&&HELLO&&'.encode('utf-8')
+            message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
+            udp_client_socket.sendto(message_header + client_message, (IP, UDP_PORT))
+            start_time = time.time()
 
 def send_message():
     logout = False
@@ -72,9 +72,8 @@ def send_message():
             ok_group = True
 
         if 'CHAT REQUEST' in message_content:
-            peer_ip_addr = client_message.split(' ')[-2]
-            peer_port = client_message.split(' ')[-1]
-            client_message = f'&&CHATREQUEST&&|{peer_ip_addr}|{peer_port}|{client_username}'
+            searched_peer = client_message.split(' ')[-1].strip()
+            client_message = f'&&CHATREQUEST&&|{searched_peer}|{client_username}'
 
         if 'REJECT' in message_content:
             sender_username = client_message.split(' ')[-1]
@@ -130,5 +129,5 @@ send_thread.start()
 recieve_thread = threading.Thread(target=receive_message)
 recieve_thread.start()
 
-# status_thread = threading.Thread(target=send_status)
-# status_thread.start()
+status_thread = threading.Thread(target=send_status)
+status_thread.start()
