@@ -89,6 +89,10 @@ def process_text_message(notified_socket, message):
 
 
 def is_busy(peer_socket):
+    for chat_room in group_chat_rooms:
+        if peer_socket in group_chat_rooms[chat_room]:
+            return True
+
     for chat_room in private_chat_rooms:
         if peer_socket in private_chat_rooms[chat_room]:
             return True
@@ -203,8 +207,6 @@ def process_message():
 
                 clients.pop(notified_socket)
                 sockets.remove(notified_socket)
-
-                continue
             
             elif '&&SEARCH&&' in decoded_message and not in_session:
                 searched_peer = (decoded_message.split('|')[-2]).strip()
@@ -225,7 +227,6 @@ def process_message():
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
                 sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-                continue
 
             elif '&&CHATREQUEST&&' in decoded_message and not in_session:
                 searched_peer = (decoded_message.split('|')[-2]).strip()
@@ -246,20 +247,21 @@ def process_message():
                     message['data'] = f'{sender_username} would like to chat with you? (OK/REJECT)'.encode('utf-8')
                     message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-
-                continue
             
             elif '&&REJECT&&' in decoded_message and not in_session:
                 sender_username = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
+
                 sender_socket = get_socket(sender_username)
+                peer_socket = get_socket(peer_username)
+
+                message['data'] = f'you have rejected the chat request!'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
                 message['data'] = f'{peer_username} rejected the chat request!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
-
                 sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-
-                continue
 
             elif '&&OK&&' in decoded_message and not in_session:
                 sender_username = (decoded_message.split('|')[-1]).strip()
@@ -275,16 +277,21 @@ def process_message():
 
                 message['data'] = f'{peer_username} accepted the chat request. you can send your message now!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
-
                 peer1_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                continue
+                message['data'] = f'you have entered into a private chat with {sender_username}. you can send your message now!'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                peer2_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
             elif '&&EXIT&&' in decoded_message and in_session:
                 peer_username = (decoded_message.split('|')[-1]).strip()
                 peer_socket = get_socket(peer_username)
 
                 participant_sockets = end_session(peer_socket)
+
+                message['data'] = f'you left the chat room.'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
                 message['data'] = f'{peer_username} left the chat room.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
@@ -293,20 +300,22 @@ def process_message():
                 for client_socket in participant_sockets:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                continue
-
             elif '&&GROUPCHAT&&' in decoded_message and not in_session:
                 tokens = decoded_message.split('|')
                 peers = tokens[2:-1]
                 sender_username = tokens[1]
                 total_global_rooms += 1
 
-                message['data'] = f'{sender_username} would like to add you to group chat room {total_global_rooms}? (OK/REJECT GROUP <room_number>)'.encode('utf-8')
+                message['data'] = f'you have added yourself to group chat {total_global_rooms}. a request has been sent to your added friends. type EXIT to leave.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
                 admin_socket = get_socket(sender_username)
                 group_chat_rooms[str(total_global_rooms)] = [admin_socket]
                 clients[admin_socket]['in_session'] = True
+                admin_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                message['data'] = f'{sender_username} would like to add you to group chat room {total_global_rooms}? (OK/REJECT GROUP <room_number>)'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
                 for peer in peers:
                     peer_socket = get_socket(peer)
@@ -314,21 +323,26 @@ def process_message():
                     if peer_socket is None:
                         continue
                     
-                    peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+                    elif is_busy(peer_socket):
+                        message['data'] = f'{peer} is busy. try again later.'.encode('utf-8')
+                        message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                        admin_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                continue
+                    else:
+                        peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
             elif '&&REJECTGROUP&&' in decoded_message and not in_session:
                 group_number = (decoded_message.split('|')[-1]).strip()
                 peer_username =  (decoded_message.split('|')[-2]).strip()
+                peer_socket = get_socket(peer_username)
+
+                message['data'] = f'you have rejected the group chat request!'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
                 message['data'] = f'{peer_username} rejected the group chat request!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
-
-                for client_socket in group_chat_rooms[group_number]:
-                    client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-
-                continue
+                group_chat_rooms[group_number][0].send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
             elif '&&OKGROUP&&' in decoded_message and not in_session:
                 group_number = (decoded_message.split('|')[-1]).strip()
@@ -344,8 +358,6 @@ def process_message():
 
                 for client_socket in group_chat_rooms[group_number]:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-
-                continue
             
             elif '&&CLIENTMESSAGE&&' in decoded_message and in_session:
                 process_text_message(notified_socket, message)
