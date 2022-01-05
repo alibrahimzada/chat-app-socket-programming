@@ -173,6 +173,10 @@ def update_activity():
 
         else:
             message = udp_socket.recvfrom(256)
+            decoded_message = message[0].decode('utf-8')
+            client_username = (decoded_message.split('|')[-1]).strip()
+            client_socket = get_socket(client_username)
+            client_address = client_socket.getpeername()
             clients[client_socket]['activity'] = ACTIVITY_LIMIT
             print(f'resetting activity time from {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
 
@@ -191,7 +195,11 @@ def process_message():
             if notified_socket == tcp_socket or notified_socket == udp_socket:
                 continue
             
-            in_session = clients[notified_socket]['in_session']
+            try:
+                in_session = clients[notified_socket]['in_session']
+            except KeyError:
+                continue
+
             message = recieve_message(notified_socket)
 
             if not message:
@@ -204,9 +212,6 @@ def process_message():
                 message['data'] = '&&LOGOUTSUCCESS&&'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 notified_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-
-                clients.pop(notified_socket)
-                sockets.remove(notified_socket)
             
             elif '&&SEARCH&&' in decoded_message and not in_session:
                 searched_peer = (decoded_message.split('|')[-2]).strip()

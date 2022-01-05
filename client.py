@@ -35,7 +35,7 @@ def send_status():
         end_time = time.time()
 
         if end_time - start_time >= STATUS_PERIOD:
-            client_message = '&&HELLO&&'.encode('utf-8')
+            client_message = f'&&HELLO&&|{client_username}'.encode('utf-8')
             message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
             udp_client_socket.sendto(message_header + client_message, (IP, UDP_PORT))
             start_time = time.time()
