@@ -44,10 +44,17 @@ def recieve_message(client_socket):
             return False
 
         message_length = int(message_header.decode('utf-8'))
-        return {'header': message_header, 'data': client_socket.recv(message_length), 'activity': ACTIVITY_LIMIT, 'start_time': time.time(), 'in_session': False}
+        data = client_socket.recv(message_length).decode('utf-8')
+        server_port = -1
+        if '&&REGISTER&&' in data:
+            server_port = int(data.split('|')[2].strip())
+            data = data.split('|')[1].strip()
+            message_header = f"{len(data) :< {HEADER_LENGTH}}".encode('utf-8')
+
+        return {'header': message_header, 'data': data.encode('utf-8'), 'server_port': server_port, 'activity': ACTIVITY_LIMIT, 'start_time': time.time(), 'in_session': False}
 
     except Exception:
-        False
+        return False
 
 
 def search_peer(peer_username):
@@ -269,22 +276,25 @@ def process_message():
                 sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
             elif '&&OK&&' in decoded_message and not in_session:
-                sender_username = (decoded_message.split('|')[-1]).strip()
-                peer_username =  (decoded_message.split('|')[-2]).strip()
+                peer_server_port = (decoded_message.split('|')[-1]).strip()
+                sender_username = (decoded_message.split('|')[-2]).strip()
+                peer_username =  (decoded_message.split('|')[-3]).strip()
 
                 peer1_socket = get_socket(sender_username)
                 peer2_socket = get_socket(peer_username)
+
+                sender_server_port = clients[peer1_socket]['server_port']
 
                 total_private_rooms += 1
                 private_chat_rooms[str(total_private_rooms)] = [peer1_socket, peer2_socket]
                 clients[peer1_socket]['in_session'] = True
                 clients[peer2_socket]['in_session'] = True
 
-                message['data'] = f'{peer_username} accepted the chat request. you can send your message now!'.encode('utf-8')
+                message['data'] = f'&&CLIENTOK&&|{peer_username} accepted the chat request. you can send your message now!|{peer_server_port}'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer1_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                message['data'] = f'you have entered into a private chat with {sender_username}. you can send your message now!'.encode('utf-8')
+                message['data'] = f'&&CLIENTOK&&|you have entered into a private chat with {sender_username}. you can send your message now!|{sender_server_port}'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer2_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
@@ -364,8 +374,8 @@ def process_message():
                 for client_socket in group_chat_rooms[group_number]:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
             
-            elif '&&CLIENTMESSAGE&&' in decoded_message and in_session:
-                process_text_message(notified_socket, message)
+            # elif '&&CLIENTMESSAGE&&' in decoded_message and in_session:
+            #     process_text_message(notified_socket, message)
 
 
 register_user_thread = threading.Thread(target=register_new_users)
