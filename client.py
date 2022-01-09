@@ -159,7 +159,7 @@ def send_message():
             tcp_client_socket.send(message_header + client_message)
         
         lock.acquire()
-        if peers == [] and '&&MESSAGE&&' in message_content:
+        if peers == [] and '&&MESSAGE&&' in client_message.decode('utf-8'):
             tcp_client_socket.send(message_header + client_message)
         lock.release()
 
