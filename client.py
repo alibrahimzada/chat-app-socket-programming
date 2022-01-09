@@ -6,6 +6,7 @@ import threading
 import random
 import string
 import select
+import logging
 
 IP = '127.0.0.1'
 TCP_PORT = 6234
@@ -28,6 +29,14 @@ MAX_CONNECTIONS = 5
 client_username = input("enter your username: ")
 client_password = input("enter your password: ")
 
+log_file = f'client_{client_username}.log'
+handlers = [logging.FileHandler(log_file, 'w'), logging.StreamHandler()]   # write to log file and stdout
+logging.basicConfig(level=logging.NOTSET,  # set root logger to NOSET 
+					handlers = handlers,
+					format="%(asctime)s;%(levelname)s;%(message)s",  # log format
+					datefmt='%Y-%m-%d %H:%M:%S')  # date format
+logger = logging.getLogger()
+
 # AF_INET corresponds to address family IPv4
 # SOCK_STREAM corresponds to TCP
 tcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
@@ -35,6 +44,8 @@ tcp_client_socket.connect(((IP, TCP_PORT)))
 tcp_client_socket.setblocking(False)
 
 tcp_server_socket.listen(MAX_CONNECTIONS)
+
+logger.info(f'TCP server of client {client_username} is running at {IP}:{TCP_SERVER_PORT} and it is listening for connections!')
 
 lock = threading.Lock()
 peers = []
@@ -49,6 +60,8 @@ encoded_client_data = ('&&REGISTER&&|' + client_username + '|' + str(TCP_SERVER_
 header = f"{len(encoded_client_data):<{HEADER_LENGTH}}".encode('utf-8')
 tcp_client_socket.send(header + encoded_client_data)
 
+logger.info(f'{client_username} has been successfully added in the server\'s database')
+
 def send_status():
     start_time = time.time()
 
@@ -61,6 +74,7 @@ def send_status():
             message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
             udp_client_socket.sendto(message_header + client_message, (IP, UDP_PORT))
             start_time = time.time()
+            logger.info(f'sending HELLO message to UDP socket of server for user with id - {client_username}')
 
 def send_message():
 
@@ -70,7 +84,7 @@ def send_message():
         reject_group = False
 
         client_message = f"{client_username}: {input()}"
-        client_message = '&&MESSAGE&&|' + client_message
+        client_message = '&&GROUPMESSAGE&&|' + client_message
         message_content = ' '.join(client_message.split(':')[1:]).strip()
 
         if message_content == 'LOGOUT':
@@ -131,7 +145,7 @@ def send_message():
             tcp_client_socket.send(message_header + client_message)
         
         lock.acquire()
-        if peers == [] and '&&MESSAGE&&' in message_content:
+        if peers == [] and '&&GROUPMESSAGE&&' in message_content:
             tcp_client_socket.send(message_header + client_message)
         lock.release()
 
@@ -156,7 +170,7 @@ def receive_server_message():
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
 
                 if '&&LOGOUTSUCCESS&&' in message:
-                    print(f'loggin out from session. goodbye {client_username}')
+                    logger.info(f'loggin out from session. goodbye {client_username}')
                     os.kill(os.getpid(), 9)
 
                 elif '&&CLIENTOK&&' in message:
@@ -176,6 +190,9 @@ def receive_server_message():
                     lock.release()
                     message = message.split('|')[1].strip()
 
+                elif '&&NOTFOUND&&' in message or '&&INVALIDSEARCH&&' in message or '&&FOUND&&' in message or '&&BUSY&&' in message:
+                    message = message.split('|')[1].strip()
+
                 if ':' in message:
                     message = ' '.join(message.split(':')[1:]).strip()
                 else:
@@ -185,10 +202,12 @@ def receive_server_message():
 
         except IOError as e:
             if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                logger.error('the process committed an unexpected exception. exiting!!!')
                 exit()
             continue
 
         except Exception:
+            logger.error('the process committed an unexpected exception. exiting!!!')
             exit()
 
 def receive_peer_message():
@@ -211,6 +230,8 @@ def receive_peer_message():
         message_length = int(message_header.decode('utf-8'))
         message = socket_.recv(message_length).decode('utf-8')
 
+        logger.info(f'{client_username} received a new message from another peer with address {socket_.getpeername()}')
+
         if ':' in message:
             message = ' '.join(message.split('|')[1:]).strip()
 
@@ -219,12 +240,16 @@ def receive_peer_message():
 
 send_thread = threading.Thread(target=send_message)
 send_thread.start()
+logger.info('successfully started send message thread')
 
 receive_server_thread = threading.Thread(target=receive_server_message)
 receive_server_thread.start()
+logger.info('successfully started receive server message thread')
 
 recieve_peer_thread = threading.Thread(target=receive_peer_message)
 recieve_peer_thread.start()
+logger.info('successfully started receive peer message thread')
 
 status_thread = threading.Thread(target=send_status)
 status_thread.start()
+logger.info('successfully started send status thread')

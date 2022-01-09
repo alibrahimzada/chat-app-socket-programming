@@ -1,7 +1,16 @@
-import socket
+import socket # socket library for creating sockets
 import select # OS level IO capability
-import time
-import threading
+import time # time library for handling time related tasks
+import threading # threading library for multithreading
+import logging # logging library to perform logging
+
+log_file = 'server.log' # filename of server logs
+handlers = [logging.FileHandler(log_file, 'w'), logging.StreamHandler()] # write to log file and stdout
+logging.basicConfig(level=logging.NOTSET,  # set root logger to NOSET 
+					handlers = handlers,
+					format="%(asctime)s;%(levelname)s;%(message)s",  # log format
+					datefmt='%Y-%m-%d %H:%M:%S')  # date format
+logger = logging.getLogger()
 
 IP = '127.0.0.1'
 TCP_PORT = 6234
@@ -27,8 +36,8 @@ udp_socket.bind((IP, UDP_PORT))
 # the queue will take at most MAX_CONNECTIONS
 tcp_socket.listen(MAX_CONNECTIONS)
 
-print(f'TCP server is running at {IP}:{TCP_PORT} and it is waiting to receive connections!')
-print(f'UDP server is running at {IP}:{UDP_PORT} and it is waiting to receive connections!')
+logger.info(f'TCP server is running at {IP}:{TCP_PORT} and it is listening for connections!')
+logger.info(f'UDP server is running at {IP}:{UDP_PORT} and it is listening for connections!')
 
 sockets = [tcp_socket, udp_socket]
 clients = {}
@@ -148,11 +157,12 @@ def register_new_users():
         client_data = recieve_message(client_socket)
 
         if not client_data:
+            logger.warning(f'registering the new user with address {client_address} failed')
             continue
 
         sockets.append(client_socket)
         clients[client_socket] = client_data
-        print(f"accepted new connection from {client_address}:{client_address[1]} username: {client_data['data'].decode('utf-8')}")
+        logger.info(f"accepted/registered new connection from {client_address}:{client_address[1]} username: {client_data['data'].decode('utf-8')}")
 
 
 def update_activity():
@@ -171,7 +181,7 @@ def update_activity():
                     clients[client_socket]['start_time'] = time.time()
 
                     if clients[client_socket]['activity'] <= 0:
-                        print(f'terminating {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
+                        logger.info(f'terminating {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
                         clients.pop(client_socket)
                         sockets.remove(client_socket)
 
@@ -185,7 +195,7 @@ def update_activity():
             client_socket = get_socket(client_username)
             client_address = client_socket.getpeername()
             clients[client_socket]['activity'] = ACTIVITY_LIMIT
-            print(f'resetting activity time from {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
+            logger.info(f'resetting activity time from {client_address}:{client_address[1]} username: {clients[client_socket]["data"].decode("utf-8")}')
 
 
 def process_message():
@@ -227,11 +237,11 @@ def process_message():
                 response = search_peer(searched_peer)
             
                 if response == None:
-                    response = 'user not found'
+                    response = '&&NOTFOUND&&|user not found'
                 elif searched_peer == sender_username:
-                    response = 'you can\'t search yourself. search for other users'
+                    response = '&&INVALIDSEARCH&&|you can\'t search yourself. search for other users'
                 else:
-                    response = f'{searched_peer} found. its address is ' + str(response)
+                    response = f'&&FOUND&&|{searched_peer} found. its address is ' + str(response)
 
                 sender_socket = get_socket(sender_username)
 
@@ -251,7 +261,7 @@ def process_message():
                     continue
 
                 if is_busy(client_socket):
-                    message['data'] = f'the user is busy. try again later.'.encode('utf-8')
+                    message['data'] = f'&&BUSY&&|the user is busy. try again later.'.encode('utf-8')
                     message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                     sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
@@ -341,7 +351,7 @@ def process_message():
                         continue
                     
                     elif is_busy(peer_socket):
-                        message['data'] = f'{peer} is busy. try again later.'.encode('utf-8')
+                        message['data'] = f'&&BUSY&&|{peer} is busy. try again later.'.encode('utf-8')
                         message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                         admin_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
@@ -393,18 +403,18 @@ def process_message():
                 for client_socket in participant_sockets:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-            elif '&&MESSAGE&&' in decoded_message and in_session:
+            elif '&&GROUPMESSAGE&&' in decoded_message and in_session:
                 process_text_message(notified_socket, message)
 
 
 register_user_thread = threading.Thread(target=register_new_users)
 register_user_thread.start()
-print('successfully started register user thread')
+logger.info('successfully started register user thread')
 
 update_activity_thread = threading.Thread(target=update_activity)
 update_activity_thread.start()
-print('successfully started update activity thread')
+logger.info('successfully started update activity thread')
 
 process_message_thread = threading.Thread(target=process_message)
 process_message_thread.start()
-print('successfully started process message thread')
+logger.info('successfully started process message thread')
