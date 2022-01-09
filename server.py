@@ -6,12 +6,13 @@ import logging # logging library to perform logging
 
 log_file = 'server.log' # filename of server logs
 handlers = [logging.FileHandler(log_file, 'w'), logging.StreamHandler()] # write to log file and stdout
-logging.basicConfig(level=logging.NOTSET,  # set root logger to NOSET 
-					handlers = handlers,
-					format="%(asctime)s;%(levelname)s;%(message)s",  # log format
-					datefmt='%Y-%m-%d %H:%M:%S')  # date format
+logging.basicConfig(level=logging.NOTSET, # set root logger to NOSET 
+					handlers = handlers, # set handlers for the logging
+					format="%(asctime)s;%(levelname)s;%(message)s", # log format
+					datefmt='%Y-%m-%d %H:%M:%S') # date format
 logger = logging.getLogger()
 
+# constants
 IP = '127.0.0.1'
 TCP_PORT = 6234
 UDP_PORT = 6235
@@ -39,6 +40,7 @@ tcp_socket.listen(MAX_CONNECTIONS)
 logger.info(f'TCP server is running at {IP}:{TCP_PORT} and it is listening for connections!')
 logger.info(f'UDP server is running at {IP}:{UDP_PORT} and it is listening for connections!')
 
+# data structures for handling client and socket instances
 sockets = [tcp_socket, udp_socket]
 clients = {}
 private_chat_rooms = {}
@@ -46,6 +48,12 @@ group_chat_rooms = {}
 
 
 def recieve_message(client_socket):
+    """
+    this function gets a notified client (a client socket which has something to be read)
+    as input. First, it extracts the header section of the message and then use it as buffer
+    size to extract the rest of the message (data). the function then returns a dictionary
+    which contains some message attributes.
+    """
     try:
         message_header = client_socket.recv(HEADER_LENGTH)
 
@@ -67,6 +75,11 @@ def recieve_message(client_socket):
 
 
 def search_peer(peer_username):
+    """
+    this function gets a client's username as string and searches the clients dictionary
+    in order to find a match for that given username. If a match is found, the function
+    returns the address (IP, PORT) of that client, else it returns None.
+    """
     address = None
     for client in clients:
         if clients[client]['data'].decode('utf-8') == peer_username:
@@ -76,6 +89,11 @@ def search_peer(peer_username):
 
 
 def get_peer_socket(peer_ip_addr, peer_port):
+    """
+    this function gets the IP and PORT as input, and uses them to query the clients dictionary.
+    If a match is found, the function returns the socket instance for that match, else it returns
+    None.
+    """
     for client in clients:
         address = client.getpeername()
         if address == (peer_ip_addr, peer_port):
@@ -85,26 +103,34 @@ def get_peer_socket(peer_ip_addr, peer_port):
 
 
 def get_socket(username):
+    """
+    this function gets the username of a client as a string and uses it to query the clients dictionary.
+    If a match is found, it returns the client's socket instance, else it returns None.
+    """
     ip, port = search_peer(username)
     user_socket = get_peer_socket(ip, port)
     return user_socket
 
 
-def forward_message(chat_rooms, notified_socket, message):
-    for chat_room in chat_rooms:
-        if notified_socket in chat_rooms[chat_room]:
-        # peer1 is receiver, peer2 is sender or peer 2 is receiver, peer1 is send
+def process_text_message(notified_socket, message):
+    """
+    this function gets a notified socket and a message as input. First, it checks all available
+    global chat rooms to check if the notified socket is in one of them. If it exists, the message
+    is forwarded to all members of that specific room.
+    """
+    for chat_room in group_chat_rooms:
+        if notified_socket in group_chat_rooms[chat_room]:
             user = clients[notified_socket]
-            for client_socket in chat_rooms[chat_room]:
+            for client_socket in group_chat_rooms[chat_room]:
                 client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])
 
 
-def process_text_message(notified_socket, message):
-    forward_message(private_chat_rooms, notified_socket, message)
-    forward_message(group_chat_rooms, notified_socket, message)
-
-
 def is_busy(peer_socket):
+    """
+    this function gets a client socket as input and checks both group and private chat rooms.
+    If the given client socket exists in any of them, the function returns True, else it returns
+    False.
+    """
     for chat_room in group_chat_rooms:
         if peer_socket in group_chat_rooms[chat_room]:
             return True
@@ -117,6 +143,11 @@ def is_busy(peer_socket):
 
 
 def remove_participant(chat_rooms, peer_socket):
+    """
+    this function gets a chat room (private/global) and a peer socket as input. Then it
+    checks all available chat rooms for the existance of the given peer socket. If it exists,
+    the function removes that socket from the room.
+    """
     room = None
     for chat_room in chat_rooms:
         if peer_socket in chat_rooms[chat_room]:
@@ -129,6 +160,10 @@ def remove_participant(chat_rooms, peer_socket):
 
 
 def end_session(peer_socket):
+    """
+    this function receives a peer socket as input and removes it from all rooms (private/group),
+    if available using the remove_participant function.
+    """
     room, participant_sockets = remove_participant(private_chat_rooms, peer_socket)
 
     if participant_sockets is None:
@@ -144,7 +179,12 @@ def end_session(peer_socket):
 
 
 def register_new_users():
-
+    """
+    this function is executed by a specific thread. the purpose of this function is to keep
+    checking the tcp socket of the server if it has anything to be read. If so, the program
+    is sure that a new user has registered in the chatting application, hence the message
+    is read from the socket and necessary actions are taken.
+    """
     while True:
         # select.select will make use of OS and it will wait until a file descriptor is ready for IO
         read_sockets, useless, exceptional_sockets = select.select(sockets, [], sockets, 0)
@@ -166,7 +206,13 @@ def register_new_users():
 
 
 def update_activity():
-
+    """
+    this function is executed by a specific thread. the purpose of this function is to keep
+    listening the udp socket of the server. if it has anything to be read, the program is sure
+    that it has received a HELLO message from a client, hence it will reset the activity time
+    for that specific client. if the udp socket has received nothing, then the program will decrease
+    the activity times of each client by a specific number of seconds.
+    """
     while True:
         # select.select will make use of OS and it will wait until a file descriptor is ready for IO
         read_sockets, useless, exceptional_sockets = select.select(sockets, [], sockets, 0)
@@ -199,6 +245,13 @@ def update_activity():
 
 
 def process_message():
+    """
+    this function is executed by a specific thread. the purpose of this function is to receive
+    client messages sent to the server and take specific actions. for instance, if the server
+    receives a SEARCH message, it performs some specific actions and returns a response to the
+    client making the SEARCH. please refer to the project report for a complete detail on such
+    messages.
+    """
     total_private_rooms = 0
     total_global_rooms = 0
 
@@ -226,6 +279,8 @@ def process_message():
             decoded_message = message['data'].decode('utf-8')
 
             if decoded_message == '&&LOGOUT&&' and not in_session:
+                # we do not remove the client socket immediately in here as it will be removed
+                # by udp socket anyways
                 message['data'] = '&&LOGOUTSUCCESS&&'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 notified_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -236,18 +291,17 @@ def process_message():
             
                 response = search_peer(searched_peer)
             
-                if response == None:
+                if response == None: # if search result is None
                     response = '&&NOTFOUND&&|user not found'
-                elif searched_peer == sender_username:
+                elif searched_peer == sender_username: # if user have searched him/herself
                     response = '&&INVALIDSEARCH&&|you can\'t search yourself. search for other users'
-                else:
+                else: # a match has been found for the search
                     response = f'&&FOUND&&|{searched_peer} found. its address is ' + str(response)
 
+                # send search results back to the user making the search
                 sender_socket = get_socket(sender_username)
-
                 message['data'] = response.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
-
                 sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
             elif '&&CHATREQUEST&&' in decoded_message and not in_session:
@@ -260,12 +314,12 @@ def process_message():
                 if client_socket is None:
                     continue
 
-                if is_busy(client_socket):
+                if is_busy(client_socket): # check if the searched peer is busy
                     message['data'] = f'&&BUSY&&|the user is busy. try again later.'.encode('utf-8')
                     message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                     sender_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                else:
+                else: # if not busy, send a message and inform them about the chat request
                     message['data'] = f'{sender_username} would like to chat with you? (OK/REJECT)'.encode('utf-8')
                     message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -277,6 +331,7 @@ def process_message():
                 sender_socket = get_socket(sender_username)
                 peer_socket = get_socket(peer_username)
 
+                # send message to both sender and receiver about the rejection of chat request
                 message['data'] = f'you have rejected the chat request!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -295,11 +350,13 @@ def process_message():
 
                 sender_server_port = clients[peer1_socket]['server_port']
 
+                # update attributes of users and create a private room
                 total_private_rooms += 1
                 private_chat_rooms[str(total_private_rooms)] = [peer1_socket, peer2_socket]
                 clients[peer1_socket]['in_session'] = True
                 clients[peer2_socket]['in_session'] = True
 
+                # send a message to both sender and receiver about the start of the chat session
                 message['data'] = f'&&CLIENTOK&&|{peer_username} accepted the chat request. you can send your message now!|{peer_server_port}'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer1_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -313,7 +370,7 @@ def process_message():
                 peer_socket = get_socket(peer_username)
 
                 participant_sockets = end_session(peer_socket)
-
+                # send a message to both sender and receiver about the end of the chat session
                 message['data'] = f'&&CLIENTEXIT&&|you left the chat room.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -322,6 +379,7 @@ def process_message():
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 participant_sockets[0].send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
+                # update user attributes
                 clients[peer_socket]['in_session'] = False
                 clients[participant_sockets[0]]['in_session'] = False
 
@@ -333,6 +391,7 @@ def process_message():
                 sender_username = tokens[1]
                 total_global_rooms += 1
 
+                # add the group admin to the group chat and let him/her know
                 message['data'] = f'you have added yourself to group chat {total_global_rooms}. a request has been sent to your added friends. type EXIT GROUP to leave.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
@@ -341,6 +400,7 @@ def process_message():
                 clients[admin_socket]['in_session'] = True
                 admin_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
+                # send an exclusive message to each invited client and ask for their response
                 message['data'] = f'{sender_username} would like to add you to group chat room {total_global_rooms}? (OK/REJECT GROUP <room_number>)'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
@@ -363,6 +423,7 @@ def process_message():
                 peer_username =  (decoded_message.split('|')[-2]).strip()
                 peer_socket = get_socket(peer_username)
 
+                # send a message to the rejector and group admin about the invitation rejection
                 message['data'] = f'you have rejected the group chat request!'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -377,9 +438,11 @@ def process_message():
 
                 peer_socket = get_socket(peer_username)
 
+                # update attributes of the acceptor
                 group_chat_rooms[group_number].append(peer_socket)
                 clients[peer_socket]['in_session'] = True
 
+                # send a message to all members of a group chat in the room
                 message['data'] = f'{peer_username} joined the group chat'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
@@ -392,6 +455,7 @@ def process_message():
 
                 participant_sockets = end_session(peer_socket)
 
+                # send a message to both leaver and all other members about the leaving of the client
                 message['data'] = f'you left the chat room.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
@@ -403,7 +467,8 @@ def process_message():
                 for client_socket in participant_sockets:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-            elif '&&GROUPMESSAGE&&' in decoded_message and in_session:
+            elif '&&MESSAGE&&' in decoded_message and in_session:
+                # send group message to all clients in a specific group chat room
                 process_text_message(notified_socket, message)
 
 

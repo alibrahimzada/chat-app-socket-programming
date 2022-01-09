@@ -8,10 +8,15 @@ import string
 import select
 import logging
 
+# constants
 IP = '127.0.0.1'
 TCP_PORT = 6234
 UDP_PORT = 6235
+HEADER_LENGTH = 5
+STATUS_PERIOD = 60
+MAX_CONNECTIONS = 5
 
+# this infinite loop makes sure that an appropriate server port is assigned to a client
 while True:
     try:
         TCP_SERVER_PORT = int(''.join(random.choices(string.digits, k = 4)))
@@ -22,17 +27,13 @@ while True:
     except PermissionError:
         continue
 
-HEADER_LENGTH = 5
-STATUS_PERIOD = 60
-MAX_CONNECTIONS = 5
-
 client_username = input("enter your username: ")
 client_password = input("enter your password: ")
 
-log_file = f'client_{client_username}.log'
+log_file = f'client_{client_username}.log' # log filename
 handlers = [logging.FileHandler(log_file, 'w'), logging.StreamHandler()]   # write to log file and stdout
 logging.basicConfig(level=logging.NOTSET,  # set root logger to NOSET 
-					handlers = handlers,
+					handlers = handlers, # set handlers for the logger
 					format="%(asctime)s;%(levelname)s;%(message)s",  # log format
 					datefmt='%Y-%m-%d %H:%M:%S')  # date format
 logger = logging.getLogger()
@@ -43,10 +44,12 @@ tcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM
 tcp_client_socket.connect(((IP, TCP_PORT)))
 tcp_client_socket.setblocking(False)
 
+# start listening from the tcp server of client
 tcp_server_socket.listen(MAX_CONNECTIONS)
 
 logger.info(f'TCP server of client {client_username} is running at {IP}:{TCP_SERVER_PORT} and it is listening for connections!')
 
+# a lock and data structures for handling client data
 lock = threading.Lock()
 peers = []
 sockets = [tcp_server_socket]
@@ -63,13 +66,18 @@ tcp_client_socket.send(header + encoded_client_data)
 logger.info(f'{client_username} has been successfully added in the server\'s database')
 
 def send_status():
+    """
+    this function is executed by a specific thread. the purpose of this function is to send
+    a HELLO message every 60 seconds to the UDP socket of the main server.
+    """
     start_time = time.time()
 
     while True:
 
         end_time = time.time()
 
-        if end_time - start_time >= STATUS_PERIOD:
+        if end_time - start_time >= STATUS_PERIOD: # check if 60 secs have passed
+            # send a HELLO message and reset the timer
             client_message = f'&&HELLO&&|{client_username}'.encode('utf-8')
             message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
             udp_client_socket.sendto(message_header + client_message, (IP, UDP_PORT))
@@ -77,14 +85,20 @@ def send_status():
             logger.info(f'sending HELLO message to UDP socket of server for user with id - {client_username}')
 
 def send_message():
-
+    """
+    this function is executed by a specific thread. the purpose of this function is to take
+    users input at each iteration and take some necessary actions. by default, the user's 
+    message is considered a normal text message. however, if the function finds out some
+    specific words in a user message (i.e., SEARCH, CHAT REQUEST, etc.), then it will change
+    the receiver of the message.
+    """
     while True:
         server_message = False
         ok_group = False
         reject_group = False
 
         client_message = f"{client_username}: {input()}"
-        client_message = '&&GROUPMESSAGE&&|' + client_message
+        client_message = '&&MESSAGE&&|' + client_message
         message_content = ' '.join(client_message.split(':')[1:]).strip()
 
         if message_content == 'LOGOUT':
@@ -145,7 +159,7 @@ def send_message():
             tcp_client_socket.send(message_header + client_message)
         
         lock.acquire()
-        if peers == [] and '&&GROUPMESSAGE&&' in message_content:
+        if peers == [] and '&&MESSAGE&&' in message_content:
             tcp_client_socket.send(message_header + client_message)
         lock.release()
 
@@ -157,7 +171,10 @@ def send_message():
         lock.release()
 
 def receive_server_message():
-
+    """
+    this function is executed by a thread. the purpose of this function is to receive
+    server messages, extract message body and show them to client.
+    """
     while True:
         try:
             while True:
@@ -169,22 +186,24 @@ def receive_server_message():
                 message_length = int(message_header.decode('utf-8'))
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
 
-                if '&&LOGOUTSUCCESS&&' in message:
+                if '&&LOGOUTSUCCESS&&' in message: # if logout is successful, kill the process using SIGKILL
                     logger.info(f'loggin out from session. goodbye {client_username}')
                     os.kill(os.getpid(), 9)
 
-                elif '&&CLIENTOK&&' in message:
+                elif '&&CLIENTOK&&' in message: # if a chat session is starting, connect user's socket to each other's tcp server
                     receiver_port = int(message.split('|')[-1].strip())
                     message = message.split('|')[1].strip()
                     tcp_client_peer_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
                     tcp_client_peer_socket.connect(((IP, receiver_port)))
                     tcp_client_peer_socket.setblocking(False)
 
+                    # change the list 'peers' in a lock since it is changed in more than one thread
                     lock.acquire()
                     peers.append(tcp_client_peer_socket)
                     lock.release()
 
-                elif '&&CLIENTEXIT' in message:
+                elif '&&CLIENTEXIT' in message: # if a client is exiting, clear out the peers dict
+                    # change the list 'peers' in a lock since it is changed in more than one thread
                     lock.acquire()
                     peers.clear()
                     lock.release()
@@ -211,22 +230,27 @@ def receive_server_message():
             exit()
 
 def receive_peer_message():
-
+    """
+    this function is executed by a thread. the purpose of this function is to receive messages
+    from other peers during P2P messaging. the messages are received by the receiver client's 
+    TCP server.
+    """
     while True:
         # select.select will make use of OS and it will wait until a file descriptor is ready for IO
         read_sockets, useless, exceptional_sockets = select.select(sockets, [], sockets)
 
-        if tcp_server_socket in read_sockets:
+        if tcp_server_socket in read_sockets: # if a new connection is made, add client's socket to a list
             socket_, client_address = tcp_server_socket.accept()
             sockets.append(socket_)
-        else:
+        else: # else retrieve the client's socket
             socket_ = read_sockets[0]
 
-        message_header = socket_.recv(HEADER_LENGTH)
+        message_header = socket_.recv(HEADER_LENGTH) # receive the message header
 
         if not len(message_header):
             return False
 
+        # use the message header to retrieve the message data and print it
         message_length = int(message_header.decode('utf-8'))
         message = socket_.recv(message_length).decode('utf-8')
 
