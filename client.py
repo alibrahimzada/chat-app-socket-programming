@@ -36,6 +36,7 @@ tcp_client_socket.setblocking(False)
 
 tcp_server_socket.listen(MAX_CONNECTIONS)
 
+lock = threading.Lock()
 peers = []
 sockets = [tcp_server_socket]
 
@@ -69,7 +70,7 @@ def send_message():
         reject_group = False
 
         client_message = f"{client_username}: {input()}"
-        client_message = '&&CLIENTMESSAGE&&|' + client_message
+        client_message = '&&MESSAGE&&|' + client_message
         message_content = ' '.join(client_message.split(':')[1:]).strip()
 
         if message_content == 'LOGOUT':
@@ -119,16 +120,27 @@ def send_message():
             client_message = f'&&EXIT&&|{client_username}'
             server_message = True
 
+        if message_content == 'EXIT GROUP':
+            client_message = f'&&EXITGROUP&&|{client_username}'
+            server_message = True
+
         client_message = client_message.encode('utf-8')
         message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
 
         if server_message:
             tcp_client_socket.send(message_header + client_message)
-        elif not server_message and peers != []:
+        
+        lock.acquire()
+        if peers == [] and '&&MESSAGE&&' in message_content:
+            tcp_client_socket.send(message_header + client_message)
+        lock.release()
+
+        lock.acquire()
+        if not server_message and peers != []:
             print(' '.join(client_message.decode('utf-8').split('|')[1:]).strip())
             for socket_ in peers:
                 socket_.send(message_header + client_message)
-
+        lock.release()
 
 def receive_server_message():
 
@@ -142,7 +154,7 @@ def receive_server_message():
                 message_header = tcp_client_socket.recv(HEADER_LENGTH)
                 message_length = int(message_header.decode('utf-8'))
                 message = tcp_client_socket.recv(message_length).decode('utf-8')
-                
+
                 if '&&LOGOUTSUCCESS&&' in message:
                     print(f'loggin out from session. goodbye {client_username}')
                     os.kill(os.getpid(), 9)
@@ -153,7 +165,16 @@ def receive_server_message():
                     tcp_client_peer_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
                     tcp_client_peer_socket.connect(((IP, receiver_port)))
                     tcp_client_peer_socket.setblocking(False)
+
+                    lock.acquire()
                     peers.append(tcp_client_peer_socket)
+                    lock.release()
+
+                elif '&&CLIENTEXIT' in message:
+                    lock.acquire()
+                    peers.clear()
+                    lock.release()
+                    message = message.split('|')[1].strip()
 
                 if ':' in message:
                     message = ' '.join(message.split(':')[1:]).strip()

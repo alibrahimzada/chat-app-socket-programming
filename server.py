@@ -304,16 +304,18 @@ def process_message():
 
                 participant_sockets = end_session(peer_socket)
 
-                message['data'] = f'you left the chat room.'.encode('utf-8')
+                message['data'] = f'&&CLIENTEXIT&&|you left the chat room.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
                 peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                message['data'] = f'{peer_username} left the chat room.'.encode('utf-8')
+                message['data'] = f'&&CLIENTEXIT&&|{peer_username} left the chat room. the chat room has been closed'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
-                clients[peer_socket]['in_session'] = False
+                participant_sockets[0].send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
 
-                for client_socket in participant_sockets:
-                    client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+                clients[peer_socket]['in_session'] = False
+                clients[participant_sockets[0]]['in_session'] = False
+
+                res = end_session(participant_sockets[0])
 
             elif '&&GROUPCHAT&&' in decoded_message and not in_session:
                 tokens = decoded_message.split('|')
@@ -321,7 +323,7 @@ def process_message():
                 sender_username = tokens[1]
                 total_global_rooms += 1
 
-                message['data'] = f'you have added yourself to group chat {total_global_rooms}. a request has been sent to your added friends. type EXIT to leave.'.encode('utf-8')
+                message['data'] = f'you have added yourself to group chat {total_global_rooms}. a request has been sent to your added friends. type EXIT GROUP to leave.'.encode('utf-8')
                 message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
 
                 admin_socket = get_socket(sender_username)
@@ -373,9 +375,26 @@ def process_message():
 
                 for client_socket in group_chat_rooms[group_number]:
                     client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
-            
-            # elif '&&CLIENTMESSAGE&&' in decoded_message and in_session:
-            #     process_text_message(notified_socket, message)
+
+            elif '&&EXITGROUP&&' in decoded_message and in_session:
+                peer_username = (decoded_message.split('|')[-1]).strip()
+                peer_socket = get_socket(peer_username)
+
+                participant_sockets = end_session(peer_socket)
+
+                message['data'] = f'you left the chat room.'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                peer_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+                message['data'] = f'{peer_username} left the chat room.'.encode('utf-8')
+                message['header'] = f"{len(message['data']) :< {HEADER_LENGTH}}".encode('utf-8')
+                clients[peer_socket]['in_session'] = False
+
+                for client_socket in participant_sockets:
+                    client_socket.send(clients[notified_socket]['header'] + clients[notified_socket]['data'] + message['header'] + message['data'])
+
+            elif '&&MESSAGE&&' in decoded_message and in_session:
+                process_text_message(notified_socket, message)
 
 
 register_user_thread = threading.Thread(target=register_new_users)
