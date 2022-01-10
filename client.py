@@ -13,7 +13,7 @@ IP = '127.0.0.1'
 TCP_PORT = 6234
 UDP_PORT = 6235
 HEADER_LENGTH = 5
-STATUS_PERIOD = 60
+STATUS_PERIOD = 6
 MAX_CONNECTIONS = 5
 
 # this infinite loop makes sure that an appropriate server port is assigned to a client
@@ -68,7 +68,7 @@ logger.info(f'{client_username} has been successfully added in the server\'s dat
 def send_status():
     """
     this function is executed by a specific thread. the purpose of this function is to send
-    a HELLO message every 60 seconds to the UDP socket of the main server.
+    a HELLO message every 6 seconds to the UDP socket of the main server.
     """
     start_time = time.time()
 
@@ -76,7 +76,7 @@ def send_status():
 
         end_time = time.time()
 
-        if end_time - start_time >= STATUS_PERIOD: # check if 60 secs have passed
+        if end_time - start_time >= STATUS_PERIOD: # check if 6 secs have passed
             # send a HELLO message and reset the timer
             client_message = f'&&HELLO&&|{client_username}'.encode('utf-8')
             message_header = f"{len(client_message) :< {HEADER_LENGTH}}".encode('utf-8')
